@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -24,6 +25,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { useSensorLogs } from "@/lib/queries";
+import { readSensorIdFromUrl } from "@/lib/run-deep-link";
 import type {
   CreateRunRequest,
   RunRecord,
@@ -79,6 +81,33 @@ export function CreateRunForm({
       device: "auto",
     },
   });
+
+  // Deep-link from a successful ingest: `/runs?sensor=<id>` preselects that
+  // sensor log. Read the id after hydration (client-only) so it can't desync
+  // SSR, but DON'T set it until the sensor-log list has actually loaded that id.
+  //
+  // `useSensorLogs()` is `[]` on mount, so setting `sensor_id` immediately put a
+  // value into the Radix <Select> that had no matching <SelectItem> yet — Radix
+  // then falls back to the placeholder and the value never "takes" (submit reads
+  // empty, raising "Pick a sensor log"). Gating on the option existing means the
+  // matching <SelectItem> is rendered when we set the value, so it both displays
+  // and sticks; `shouldValidate` clears the pending "Pick a sensor log" error.
+  //
+  // The read is idempotent — it does NOT strip `?sensor=` (see run-deep-link.ts):
+  // Next dev's StrictMode remounts this form, and each mount gets a fresh ref, so
+  // the leftover param lets the surviving mount preselect. We apply exactly once
+  // (clear the ref) so a leftover `?sensor=` never clobbers a later manual change.
+  const preselectId = useRef<string | null>(null);
+  useEffect(() => {
+    preselectId.current = readSensorIdFromUrl();
+  }, []);
+  useEffect(() => {
+    const id = preselectId.current;
+    if (id && sensorLogs.some((s) => s.sensor_id === id)) {
+      form.setValue("sensor_id", id, { shouldValidate: true, shouldTouch: true });
+      preselectId.current = null;
+    }
+  }, [sensorLogs, form]);
 
   const handle = (values: CreateValues) => onSubmit(values);
 

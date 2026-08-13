@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Loader2, Boxes } from "lucide-react";
 import { toast } from "sonner";
 
@@ -10,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useIngestFrames } from "@/lib/queries";
+import { createRunHref } from "@/lib/run-deep-link";
 
 const FRAME_ACCEPT = ".bin,.pcd";
 const SENSOR_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
@@ -24,6 +26,7 @@ function isFrame(file: File): boolean {
  * flow reads — so the sensor log becomes selectable in the create-run form.
  */
 export function FrameLogForm() {
+  const router = useRouter();
   const ingest = useIngestFrames();
   const [sensorId, setSensorId] = useState("");
   const [date, setDate] = useState("");
@@ -43,9 +46,14 @@ export function FrameLogForm() {
       { sensorId, date, files },
       {
         onSuccess: (res) =>
-          toast.success(
-            `Ingested ${res.frames} frame(s) into "${res.sensorId}" — create a run to detect`,
-          ),
+          toast.success(`Ingested ${res.frames} frame(s) into "${res.sensorId}"`, {
+            // One-click hand-off: jump straight to the create-run form with this
+            // sensor log preselected, so the user never has to re-find it.
+            action: {
+              label: "Create run →",
+              onClick: () => router.push(createRunHref(res.sensorId)),
+            },
+          }),
         onError: (err) => toast.error(err.message),
       },
     );

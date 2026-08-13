@@ -40,9 +40,21 @@ import {
 import { EngineStatusBadge } from "./engine-status-badge";
 import { EditRunForm } from "./run-form";
 import { FrameVisualizer } from "./frame-visualizer";
-import { useRun, useExecuteRun, useUpdateRun, useDeleteRun } from "@/lib/queries";
+import {
+  useRun,
+  useExecuteRun,
+  useUpdateRun,
+  useDeleteRun,
+  useSensorLogs,
+  useRunProgress,
+} from "@/lib/queries";
 import { getDownloadUrl } from "@/lib/api-client";
 import { startBrowserDownload } from "@/lib/browser-download";
+import {
+  frameProgressLabel,
+  frameProgressPercent,
+  runProgressLabel,
+} from "@/lib/run-progress-label";
 import type { RunRecord } from "@mmdetection3d-lidar-dataset/shared";
 
 function fmtBytes(n: number): string {
@@ -178,29 +190,66 @@ function Actions({ run }: { run: RunRecord }) {
   );
 }
 
-function RunProgress() {
+function RunProgress({
+  runId,
+  sensorId,
+  device,
+}: {
+  runId: string;
+  sensorId: string;
+  device: string;
+}) {
   const [elapsed, setElapsed] = useState(0);
+  // Cheap, cached read (already fetched by the runs list + create form). Gives
+  // the determinate denominator (total frames) — no per-frame B2 write, so
+  // write-amplification is untouched.
+  const { data: sensorLogs } = useSensorLogs();
+  const total = sensorLogs?.find((s) => s.sensor_id === sensorId)?.frame_count;
+  // Advancing numerator: the annotation objects already written for this run.
+  // This card only mounts while status === "running", so the poll is on here
+  // and stops the moment the run settles and the card unmounts.
+  const { data: processed } = useRunProgress(runId, true);
   useEffect(() => {
     const id = setInterval(() => setElapsed((s) => s + 1), 1000);
     return () => clearInterval(id);
   }, []);
+  const frameLabel = frameProgressLabel(processed, total);
+  const pct = frameProgressPercent(processed, total);
   return (
     <Card aria-live="polite">
       <CardContent className="p-5 space-y-3">
         <div className="flex items-center justify-between gap-4">
           <p className="flex items-center gap-2 text-sm font-medium">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Running MMDetection3D over the sensor log…
+            {runProgressLabel(total, device)}
           </p>
           <span className="font-mono text-xs tabular-nums text-muted-foreground">
             {elapsed}s elapsed
           </span>
         </div>
-        <div className="h-1.5 w-full animate-pulse rounded-full bg-primary/40" />
-        <p className="text-xs text-muted-foreground">
-          Loading the model then annotating each frame. This page updates
-          automatically when the run finishes.
-        </p>
+        {/* Determinate bar (width = frames done / total) once the first frame's
+            annotation lands; an indeterminate pulse until then. */}
+        {pct === null ? (
+          <div className="h-1.5 w-full animate-pulse rounded-full bg-primary/40" />
+        ) : (
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-primary/20">
+            <div
+              className="h-full rounded-full bg-primary transition-all duration-500 ease-out"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        )}
+        <div className="flex items-center justify-between gap-4">
+          <p className="text-xs text-muted-foreground">
+            Loading the model then annotating each frame. This page updates
+            automatically when the run finishes.
+          </p>
+          {frameLabel && (
+            <span className="shrink-0 font-mono text-xs tabular-nums text-foreground">
+              {frameLabel}
+            </span>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
@@ -236,7 +285,13 @@ export function RunDetail({ runId }: { runId: string }) {
 
       <Actions run={run} />
 
-      {run.status === "running" && <RunProgress />}
+      {run.status === "running" && (
+        <RunProgress
+          runId={run.run_id}
+          sensorId={run.sensor_id}
+          device={run.resolved_device ?? run.device}
+        />
+      )}
 
       {run.status === "error" && run.error && (
         <Alert variant="destructive">

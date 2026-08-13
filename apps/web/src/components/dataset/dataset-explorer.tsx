@@ -19,11 +19,8 @@ import {
 import { useFiles } from "@/lib/queries";
 import { getDownloadUrl } from "@/lib/api-client";
 import { startBrowserDownload } from "@/lib/browser-download";
+import { SAMPLE_PREFIX } from "@/lib/sample-prefix";
 import type { FileMetadata } from "@mmdetection3d-lidar-dataset/shared";
-
-// The sample writes everything under this prefix (settings.sample_prefix). The
-// full-bucket /files explorer stays global; this view is scoped to the sample.
-const SAMPLE_PREFIX = "mmdetection3d-lidar-dataset/";
 
 // Pipeline stages, in the order data flows through them.
 const STAGES: { key: string; label: string; blurb: string }[] = [

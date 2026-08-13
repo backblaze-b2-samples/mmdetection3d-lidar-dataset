@@ -19,7 +19,7 @@ A **Detection Run** is one MMDetection3D pass over a sensor log's LiDAR frames: 
 
 ## Inputs
 - `label`: string (free text)
-- `sensor_id`: string (Select, populated from ingested logs in B2)
+- `sensor_id`: string (Select, populated from ingested logs in B2). Arriving at `/runs?sensor=<id>` preselects that log — the one-click hand-off from a successful ingest (the ingest success toast's "Create run →" action).
 - `model`: `pointpillars | centerpoint | second` (Select)
 - `task`: `detection | segmentation` (Select)
 - `score_threshold`: float 0–1 (numeric input, default 0.3)
@@ -49,7 +49,7 @@ The demo does **not train** a model (infeasible on CPU in seconds). It archives 
 
 ## UX States
 - Empty (no runs) → EmptyState with a create prompt.
-- Running → live progress card + polling; the primary action disables so no second concurrent run launches.
+- Running → live progress card + polling; the primary action disables so no second concurrent run launches. The card shows determinate scope — "Processing N frames on <DEVICE>…" from the sensor log's `frame_count` (`GET /sensor-logs`) — plus an elapsed counter, an advancing **"Frame X of N"**, and a determinate bar (width = X/N). X is derived read-only by counting the per-frame annotation objects already written under `annotations/<run_id>/` (a plain prefix list via the existing `GET /files?prefix=` endpoint — a targeted scan that bypasses the full-bucket cache), so it adds **no per-frame B2 write** and write-amplification is untouched. Until the first annotation lands the card keeps the scope line and an indeterminate pulse.
 - Error → destructive alert with the server message.
 
 ## Verification

@@ -1,4 +1,4 @@
-<!-- last_verified: 2026-08-06 -->
+<!-- last_verified: 2026-08-13 -->
 # App Workflows
 
 User journeys inside the application.
@@ -8,7 +8,7 @@ User journeys inside the application.
 - User navigates to `/upload` (Ingest)
 - Enters a `sensor_id` and acquisition `date`, and selects one or more KITTI `.bin` / `.pcd` frames
 - Each frame uploads **directly from the browser to B2** under `raw/<sensor_id>/<date>/` (presigned PUT); a `.bin` whose byte length isn't a float32 multiple is rejected
-- On success: a toast, and the sensor log becomes selectable on the Runs create form
+- On success: a toast whose **"Create run →"** action deep-links straight to `/runs?sensor=<id>` with that exact sensor log preselected — a one-click hand-off, so the user never has to re-find "Runs" in the sidebar and re-pick the sensor. The log is also selectable on the Runs create form as before.
 - See: [LiDAR ingest](features/lidar-ingest.md)
 
 ## Create and run a Detection Run
@@ -17,7 +17,7 @@ User journeys inside the application.
 - Fills the create form: label (free text), sensor log (Select, from B2), model (`pointpillars`/`centerpoint`/`second`), task (`detection`/`segmentation`), score threshold, val split, device — the form surfaces safe defaults as guidance (try `pointpillars` / `detection` / `0.3` on the seeded demo log)
 - Submits → a `pending` run is created and the user lands on `/runs/<id>`
 - The engine-status badge shows whether MMDetection3D is installed; if not, running the run fails loudly with an install hint (never a fake result)
-- User clicks **Run detection** → the run goes `running` (live progress + polling), then `done`: each frame shows a bird's-eye-view preview and its 3D-box annotations, and the dataset manifest + checkpoint record are downloadable from B2
+- User clicks **Run detection** → the run goes `running` (live progress + polling), then `done`: each frame shows a bird's-eye-view preview and its 3D-box annotations, and the dataset manifest + checkpoint record are downloadable from B2. While `running`, the progress card names the determinate scope — "Processing N frames on `<DEVICE>`…" from the sensor log's frame count — alongside the elapsed counter and an advancing **"Frame X of N"** with a determinate bar, so a multi-minute CPU run shows real headway (X counts the annotation objects already written, read-only) rather than an open-ended spinner
 - User can **Edit** (label / model / task / threshold / val_split / device, then re-run) or **Delete** (removes only this run's derived artifacts)
 - See: [Detection Runs](features/detection-runs.md), [MMDetection3D engine](features/mmdet3d-engine.md)
 

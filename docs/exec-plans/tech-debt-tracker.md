@@ -75,3 +75,13 @@ Low-severity polish, left for a follow-up; none blocks the core flow.
 | Custom `FileNotFoundError` shadowed the built-in | Renamed to `FileNotFoundServiceError` |
 | Dropzone accepted any file type client-side | `accept` allow-list mirroring backend `ALLOWED_TYPES` (tested for drift) |
 | No test harness for feature specs | pytest suite across upload, files, activity, errors, validation, rate limit, pagination |
+
+## 2026-08-13 — verify
+
+Nitpicks surfaced by `/sample-3-verify` (marquee feature verified PASS; these are backlog-only, non-blocking):
+
+- Runs create form (ingest→run hand-off) — deep-linked sensor preselect shows the "Select an ingested sensor log" placeholder for ~8–10s before self-filling (waits on `/sensor-logs` list latency; instant when the list is already warm) → a hasty submit in that window hits "Pick a sensor log"; self-heals and the goal is reachable (`.local/verify/A4/A4-08-handoff-preselect.png` → `A4-13-handoff-polled.png`). Adversarial gate demoted this from friction to nitpick. Fix: invalidate/refetch the `useSensorLogs` query on ingest success so the create form's list is fresh.
+- Run detail (running, on a re-run) — the determinate "Frame X of N" reads 3/3 & bar 100% from ~1s because the numerator counts annotation objects that persist from the prior execution (not reset per re-run); the FIRST run advances 0→1→2→3 correctly (`.local/verify/B4/15-reload-midrun.png`). Fix: scope the progress count to the current execution (clear/track per-run).
+- Run detail (running, after a mid-run reload) — the determinate "Frame X of N" degrades to the indeterminate pulse and the elapsed counter resets to ~0 on a fresh load, since server polling only knows "running" (`.local/verify/B3/B3-11-after-reload-midrun.png`). Cosmetic; state stays clearly in-progress.
+- Runs create form — Score threshold / Val split number inputs render "0,3" / "0,2" (comma decimal) vs helper text "Default 0.3" (`.local/verify/A3/A3-03-runs.png`) → low-confidence, likely the driver browser's locale on `<input type=number>`, not necessarily an app defect; confirm under a forced en-US locale.
+- Runs create form (direct-load, mid-reflow) — the narrow left form column rendered visually cramped/overlapping labels in one shot taken while the Runs table was still loading (`.local/verify/C4/40-direct-load-preselect.png`) → likely a transient layout squish; rendered normally otherwise and submit worked.

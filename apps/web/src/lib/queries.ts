@@ -28,6 +28,7 @@ import {
   updateRun,
   type FrameLogInput,
 } from "@/lib/api-client";
+import { annotationsPrefix } from "@/lib/sample-prefix";
 import type {
   CreateRunRequest,
   FileMetadata,
@@ -257,6 +258,22 @@ export function useRun(id: string | undefined) {
       query.state.data && ACTIVE_STATUSES.has(query.state.data.status)
         ? RUN_POLL_MS
         : false,
+  });
+}
+
+// Determinate "Frame X of N" while a run executes. Counts the per-frame
+// annotation objects already written under annotations/<run_id>/ — a read-only
+// list of an EXISTING endpoint (`GET /files?prefix=`), so it adds NO per-frame
+// B2 write and write-amplification is untouched. A non-empty prefix is a
+// targeted scan (it bypasses the full-bucket listing cache), so each poll is
+// cheap. Polls only while `enabled` (status running) and is disabled once the
+// run settles, so a finished run stops listing the bucket.
+export function useRunProgress(runId: string, enabled: boolean) {
+  return useQuery<number, ApiError>({
+    queryKey: [...qk.run(runId), "annotation-count"],
+    queryFn: async () => (await getFiles(annotationsPrefix(runId), 1000)).length,
+    enabled,
+    refetchInterval: enabled ? RUN_POLL_MS : false,
   });
 }
 

@@ -18,6 +18,7 @@ Upload raw LiDAR point-cloud frames (KITTI `.bin` / `.pcd`) straight to B2 as a 
 - `POST /frames/presign` validates the sensor id (regex), date (`YYYY-MM-DD`), and size, then signs a direct-to-B2 PUT to `raw/<sensor_id>/<date>/<frame>`.
 - The browser PUTs the bytes **directly to B2** (bytes never traverse the API — no Vercel payload ceiling).
 - `POST /frames/verify` HEADs the stored object; a `.bin` whose byte length isn't a multiple of 4 (float32 stride) is deleted and rejected.
+- On success the toast offers a **"Create run →"** action that deep-links to `/runs?sensor=<sensor_id>`, which preselects the just-ingested log in the create-run form (`takeSensorIdFromUrl` / `createRunHref` in `lib/run-deep-link.ts`).
 
 ## Key layout
 ```
