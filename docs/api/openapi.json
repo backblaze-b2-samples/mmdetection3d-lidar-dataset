@@ -1,6 +1,72 @@
 {
   "components": {
     "schemas": {
+      "CreateRunRequest": {
+        "properties": {
+          "device": {
+            "default": "auto",
+            "enum": [
+              "auto",
+              "cpu",
+              "cuda",
+              "mps"
+            ],
+            "title": "Device",
+            "type": "string"
+          },
+          "label": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "model": {
+            "default": "pointpillars",
+            "enum": [
+              "pointpillars",
+              "centerpoint",
+              "second"
+            ],
+            "title": "Model",
+            "type": "string"
+          },
+          "score_threshold": {
+            "default": 0.3,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Score Threshold",
+            "type": "number"
+          },
+          "sensor_id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Sensor Id",
+            "type": "string"
+          },
+          "task": {
+            "default": "detection",
+            "enum": [
+              "detection",
+              "segmentation"
+            ],
+            "title": "Task",
+            "type": "string"
+          },
+          "val_split": {
+            "default": 0.2,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Val Split",
+            "type": "number"
+          }
+        },
+        "required": [
+          "label",
+          "sensor_id"
+        ],
+        "title": "CreateRunRequest",
+        "type": "object"
+      },
       "DailyUploadCount": {
         "properties": {
           "date": {
@@ -17,6 +83,35 @@
           "uploads"
         ],
         "title": "DailyUploadCount",
+        "type": "object"
+      },
+      "EngineStatus": {
+        "description": "Reported to the UI engine-status badge and the run route.",
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "device": {
+            "title": "Device",
+            "type": "string"
+          },
+          "torch_installed": {
+            "title": "Torch Installed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "available",
+          "device",
+          "torch_installed",
+          "detail"
+        ],
+        "title": "EngineStatus",
         "type": "object"
       },
       "FileMetadata": {
@@ -151,6 +246,17 @@
             ],
             "title": "Image Width"
           },
+          "intensity_mean": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intensity Mean"
+          },
           "md5": {
             "title": "Md5",
             "type": "string"
@@ -202,6 +308,40 @@
               }
             ],
             "title": "Pdf Title"
+          },
+          "point_bounds": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Point Bounds"
+          },
+          "point_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Point Count"
+          },
+          "point_dimensions": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Point Dimensions"
           },
           "sha256": {
             "title": "Sha256",
@@ -294,6 +434,101 @@
         "title": "FileUploadResponse",
         "type": "object"
       },
+      "FrameAnnotation": {
+        "description": "Per-frame annotation record + the B2 keys of its artifacts.",
+        "properties": {
+          "annotation_key": {
+            "title": "Annotation Key",
+            "type": "string"
+          },
+          "frame": {
+            "title": "Frame",
+            "type": "string"
+          },
+          "label_histogram": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Label Histogram",
+            "type": "object"
+          },
+          "num_boxes": {
+            "default": 0,
+            "title": "Num Boxes",
+            "type": "integer"
+          },
+          "point_count": {
+            "default": 0,
+            "title": "Point Count",
+            "type": "integer"
+          },
+          "preview_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preview Key"
+          },
+          "raw_key": {
+            "title": "Raw Key",
+            "type": "string"
+          },
+          "split": {
+            "default": "train",
+            "enum": [
+              "train",
+              "val"
+            ],
+            "title": "Split",
+            "type": "string"
+          }
+        },
+        "required": [
+          "frame",
+          "raw_key",
+          "annotation_key"
+        ],
+        "title": "FrameAnnotation",
+        "type": "object"
+      },
+      "FramePresignRequest": {
+        "description": "Declare a raw LiDAR frame upload targeting the sensor-log layout.\n\nUnlike the generic uploader (flat ``uploads/``), a frame lands under\n``raw/<sensor_id>/<date>/`` so it becomes selectable as a sensor log in the\ncreate-run form and feeds the detection pipeline.",
+        "properties": {
+          "content_type": {
+            "title": "Content Type",
+            "type": "string"
+          },
+          "date": {
+            "title": "Date",
+            "type": "string"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "sensor_id": {
+            "title": "Sensor Id",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sensor_id",
+          "date",
+          "filename",
+          "content_type",
+          "size_bytes"
+        ],
+        "title": "FramePresignRequest",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -371,6 +606,318 @@
           "expires_in"
         ],
         "title": "PresignUploadResponse",
+        "type": "object"
+      },
+      "RunRecord": {
+        "description": "The full persisted manifest for a run.",
+        "properties": {
+          "checkpoint_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkpoint Key"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "derived_bytes": {
+            "default": 0,
+            "title": "Derived Bytes",
+            "type": "integer"
+          },
+          "device": {
+            "default": "auto",
+            "enum": [
+              "auto",
+              "cpu",
+              "cuda",
+              "mps"
+            ],
+            "title": "Device",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "frames": {
+            "items": {
+              "$ref": "#/components/schemas/FrameAnnotation"
+            },
+            "title": "Frames",
+            "type": "array"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "manifest_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manifest Key"
+          },
+          "model": {
+            "default": "pointpillars",
+            "enum": [
+              "pointpillars",
+              "centerpoint",
+              "second"
+            ],
+            "title": "Model",
+            "type": "string"
+          },
+          "resolved_device": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved Device"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "score_threshold": {
+            "default": 0.3,
+            "title": "Score Threshold",
+            "type": "number"
+          },
+          "sensor_id": {
+            "title": "Sensor Id",
+            "type": "string"
+          },
+          "source_bytes": {
+            "default": 0,
+            "title": "Source Bytes",
+            "type": "integer"
+          },
+          "status": {
+            "default": "pending",
+            "enum": [
+              "pending",
+              "running",
+              "done",
+              "error"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "task": {
+            "default": "detection",
+            "enum": [
+              "detection",
+              "segmentation"
+            ],
+            "title": "Task",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "val_split": {
+            "default": 0.2,
+            "title": "Val Split",
+            "type": "number"
+          }
+        },
+        "required": [
+          "run_id",
+          "label",
+          "sensor_id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "RunRecord",
+        "type": "object"
+      },
+      "RunSummary": {
+        "description": "Aggregate roll-up for a completed run.",
+        "properties": {
+          "frame_count": {
+            "default": 0,
+            "title": "Frame Count",
+            "type": "integer"
+          },
+          "per_class": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Per Class",
+            "type": "object"
+          },
+          "total_boxes": {
+            "default": 0,
+            "title": "Total Boxes",
+            "type": "integer"
+          },
+          "train_frames": {
+            "default": 0,
+            "title": "Train Frames",
+            "type": "integer"
+          },
+          "val_frames": {
+            "default": 0,
+            "title": "Val Frames",
+            "type": "integer"
+          }
+        },
+        "title": "RunSummary",
+        "type": "object"
+      },
+      "SensorLogInfo": {
+        "description": "A named collection of ingested LiDAR frames (populates the form Select).",
+        "properties": {
+          "dates": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Dates",
+            "type": "array"
+          },
+          "frame_count": {
+            "default": 0,
+            "title": "Frame Count",
+            "type": "integer"
+          },
+          "sensor_id": {
+            "title": "Sensor Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sensor_id"
+        ],
+        "title": "SensorLogInfo",
+        "type": "object"
+      },
+      "UpdateRunRequest": {
+        "description": "Edit verb: change label / model / task / threshold / val_split / device.\nThe sensor log is fixed at create time \u2014 a different log is a new run.",
+        "properties": {
+          "device": {
+            "anyOf": [
+              {
+                "enum": [
+                  "auto",
+                  "cpu",
+                  "cuda",
+                  "mps"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "enum": [
+                  "pointpillars",
+                  "centerpoint",
+                  "second"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "score_threshold": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Threshold"
+          },
+          "task": {
+            "anyOf": [
+              {
+                "enum": [
+                  "detection",
+                  "segmentation"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task"
+          },
+          "val_split": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Val Split"
+          }
+        },
+        "title": "UpdateRunRequest",
         "type": "object"
       },
       "UploadStats": {
@@ -463,12 +1010,34 @@
     }
   },
   "info": {
-    "description": "Local API for the Vibe Coding Starter Kit template, providing file upload and management backed by Backblaze B2. This contract documents the template's local API, not a hosted public endpoint.",
-    "title": "Vibe Coding Starter Kit API",
+    "description": "Local API for MMDetection3D LiDAR Dataset: ingest raw LiDAR point-cloud frames to Backblaze B2, run MMDetection3D locally to produce per-frame 3D detection/segmentation annotations, archive checkpoints, and tie every frame to a dataset manifest \u2014 all over the S3-compatible API. This contract documents the sample's local API, not a hosted public endpoint.",
+    "title": "MMDetection3D LiDAR Dataset API",
     "version": "0.1.0"
   },
   "openapi": "3.1.0",
   "paths": {
+    "/engine/status": {
+      "get": {
+        "description": "Whether the MMDetection3D stack is importable + which device is active.",
+        "operationId": "engine_status_endpoint_engine_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EngineStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Engine Status Endpoint",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
     "/files": {
       "get": {
         "operationId": "list_files_endpoint_files_get",
@@ -961,6 +1530,90 @@
         ]
       }
     },
+    "/frames/presign": {
+      "post": {
+        "description": "Presign a direct-to-B2 PUT for a raw LiDAR frame in the sensor-log layout.\n\nWrites under ``raw/<sensor_id>/<date>/`` so the frame feeds the detection\nflow and the sensor log becomes selectable in the create-run form \u2014 unlike\nthe generic uploader's flat ``uploads/`` prefix.",
+        "operationId": "presign_frame_frames_presign_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FramePresignRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresignUploadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Presign Frame",
+        "tags": [
+          "upload"
+        ]
+      }
+    },
+    "/frames/verify": {
+      "post": {
+        "description": "Confirm a LiDAR frame just uploaded directly to B2 is valid.",
+        "operationId": "verify_frame_route_frames_verify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyUploadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileUploadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Verify Frame Route",
+        "tags": [
+          "upload"
+        ]
+      }
+    },
     "/health": {
       "get": {
         "operationId": "health_health_get",
@@ -996,6 +1649,316 @@
         "summary": "Metrics",
         "tags": [
           "metrics"
+        ]
+      }
+    },
+    "/runs": {
+      "get": {
+        "operationId": "list_runs_endpoint_runs_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RunRecord"
+                  },
+                  "title": "Response List Runs Endpoint Runs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Runs Endpoint",
+        "tags": [
+          "runs"
+        ]
+      },
+      "post": {
+        "operationId": "create_run_endpoint_runs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Run Endpoint",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/runs/{run_id}": {
+      "delete": {
+        "operationId": "delete_run_endpoint_runs__run_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Run Endpoint",
+        "tags": [
+          "runs"
+        ]
+      },
+      "get": {
+        "operationId": "get_run_endpoint_runs__run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Run Endpoint",
+        "tags": [
+          "runs"
+        ]
+      },
+      "patch": {
+        "operationId": "update_run_endpoint_runs__run_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Run Endpoint",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/runs/{run_id}/execute": {
+      "post": {
+        "description": "Run (or re-run) MMDetection3D over a sensor log and write its artifacts.",
+        "operationId": "execute_run_endpoint_runs__run_id__execute_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Execute Run Endpoint",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/sensor-logs": {
+      "get": {
+        "description": "Sensor logs (with their dates + frame counts) that have ingested frames.",
+        "operationId": "list_sensor_logs_endpoint_sensor_logs_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SensorLogInfo"
+                  },
+                  "title": "Response List Sensor Logs Endpoint Sensor Logs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Sensor Logs Endpoint",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/sensor-logs/{sensor_id}/dates": {
+      "get": {
+        "description": "Acquisition dates that actually have frames under a sensor id.",
+        "operationId": "list_dates_endpoint_sensor_logs__sensor_id__dates_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sensor_id",
+            "required": true,
+            "schema": {
+              "title": "Sensor Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Response List Dates Endpoint Sensor Logs  Sensor Id  Dates Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Dates Endpoint",
+        "tags": [
+          "runs"
         ]
       }
     },

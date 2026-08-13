@@ -8,19 +8,33 @@ import {
 } from "@tanstack/react-query";
 import {
   ApiError,
+  createRun,
   deleteFile,
+  deleteRun,
+  executeRun,
   getDownloadUrl,
+  getEngineStatus,
   getFileDetail,
   getFiles,
   getFileStats,
   getHealth,
   getPreviewUrl,
+  getRun,
+  getRuns,
+  getSensorLogDates,
+  getSensorLogs,
   getUploadActivity,
+  ingestFrames,
+  updateRun,
+  type FrameLogInput,
 } from "@/lib/api-client";
 import type {
+  CreateRunRequest,
   FileMetadata,
   FileMetadataDetail,
-} from "@vibe-coding-starter-kit/shared";
+  RunRecord,
+  UpdateRunRequest,
+} from "@mmdetection3d-lidar-dataset/shared";
 
 // Single source of truth for query keys. Keep these tightly scoped so that
 // invalidating "files" doesn't blow away unrelated caches, and so an IDE
@@ -35,6 +49,12 @@ export const qk = {
   preview: (key: string) => [...qk.all, "preview", key] as const,
   detail: (key: string) => [...qk.all, "detail", key] as const,
   health: () => [...qk.all, "health"] as const,
+  runs: () => [...qk.all, "runs"] as const,
+  run: (id: string) => [...qk.all, "runs", id] as const,
+  engineStatus: () => [...qk.all, "engine-status"] as const,
+  sensorLogs: () => [...qk.all, "sensor-logs"] as const,
+  sensorLogDates: (sensorId: string) =>
+    [...qk.all, "sensor-logs", sensorId, "dates"] as const,
 };
 
 export type Health = Awaited<ReturnType<typeof getHealth>>;
@@ -166,6 +186,136 @@ export function useDeleteFile() {
       // activity) against the server in the background.
       dropDeletedFileFromCache(qc, fileKey);
       qc.invalidateQueries({ queryKey: qk.all });
+    },
+  });
+}
+
+// Ingest raw LiDAR frames as a sensor log. On success the new sensor id + its
+// dates appear in the create-run form, so we invalidate the sensor-log caches
+// (and the file listing/stats the frames now affect).
+export function useIngestFrames() {
+  const qc = useQueryClient();
+  return useMutation<{ sensorId: string; frames: number }, ApiError, FrameLogInput>({
+    mutationFn: (input) => ingestFrames(input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.sensorLogs() });
+      qc.invalidateQueries({ queryKey: [...qk.all, "files"] });
+      qc.invalidateQueries({ queryKey: qk.stats() });
+    },
+  });
+}
+
+// --- Detection Runs (primary entity) -------------------------------------
+
+// The engine-status badge. Cheap and side-effect free; polled on focus so a
+// freshly-installed engine flips the badge without a manual refresh.
+export function useEngineStatus() {
+  return useQuery({
+    queryKey: qk.engineStatus(),
+    queryFn: getEngineStatus,
+    staleTime: 30_000,
+    retry: false,
+  });
+}
+
+export function useSensorLogs() {
+  return useQuery({ queryKey: qk.sensorLogs(), queryFn: getSensorLogs });
+}
+
+export function useSensorLogDates(sensorId: string | undefined) {
+  return useQuery({
+    queryKey: qk.sensorLogDates(sensorId ?? ""),
+    queryFn: () => getSensorLogDates(sensorId as string),
+    enabled: !!sensorId,
+  });
+}
+
+// While ANY run is still pending/running, poll the list so a stuck/stale
+// "Running" row auto-advances to Done/Error without a manual refresh.
+const ACTIVE_STATUSES = new Set(["pending", "running"]);
+const RUN_POLL_MS = 2500;
+
+export function useRuns() {
+  return useQuery<RunRecord[], ApiError>({
+    queryKey: qk.runs(),
+    queryFn: getRuns,
+    refetchInterval: (query) =>
+      (query.state.data ?? []).some((r) => ACTIVE_STATUSES.has(r.status))
+        ? RUN_POLL_MS
+        : false,
+  });
+}
+
+// Poll a single run while it is pending/running so the badge advances to
+// Done/Error on its own and the primary action re-enables when it settles.
+export function useRun(id: string | undefined) {
+  return useQuery<RunRecord, ApiError>({
+    queryKey: qk.run(id ?? ""),
+    queryFn: () => getRun(id as string),
+    enabled: !!id,
+    refetchInterval: (query) =>
+      query.state.data && ACTIVE_STATUSES.has(query.state.data.status)
+        ? RUN_POLL_MS
+        : false,
+  });
+}
+
+export function useCreateRun() {
+  const qc = useQueryClient();
+  return useMutation<RunRecord, ApiError, CreateRunRequest>({
+    mutationFn: (body) => createRun(body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.runs() }),
+  });
+}
+
+export function useUpdateRun(id: string) {
+  const qc = useQueryClient();
+  return useMutation<RunRecord, ApiError, UpdateRunRequest>({
+    mutationFn: (body) => updateRun(id, body),
+    onSuccess: (record) => {
+      qc.setQueryData(qk.run(id), record);
+      qc.invalidateQueries({ queryKey: qk.runs() });
+    },
+  });
+}
+
+export function useDeleteRun() {
+  const qc = useQueryClient();
+  return useMutation<
+    { deleted: boolean; run_id: string; objects: number },
+    ApiError,
+    string
+  >({
+    mutationFn: (id) => deleteRun(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.runs() }),
+  });
+}
+
+// Run / re-run inference. Long-running (real inference), so the mutation's
+// pending state drives the button spinner; on success we refresh the detail +
+// the list + storage stats (write amplification changed).
+export function useExecuteRun(id: string) {
+  const qc = useQueryClient();
+  return useMutation<RunRecord, ApiError, void, { prev?: RunRecord }>({
+    mutationFn: () => executeRun(id),
+    // Optimistically flip the cached run to "running" the instant the user
+    // clicks, so the status badge is coherent with the button and the poll kicks in.
+    onMutate: async () => {
+      await qc.cancelQueries({ queryKey: qk.run(id) });
+      const prev = qc.getQueryData<RunRecord>(qk.run(id));
+      if (prev) {
+        qc.setQueryData<RunRecord>(qk.run(id), { ...prev, status: "running", error: null });
+      }
+      return { prev };
+    },
+    onError: () => {
+      qc.invalidateQueries({ queryKey: qk.run(id) });
+      qc.invalidateQueries({ queryKey: qk.runs() });
+    },
+    onSuccess: (record) => {
+      qc.setQueryData(qk.run(id), record);
+      qc.invalidateQueries({ queryKey: qk.runs() });
+      qc.invalidateQueries({ queryKey: qk.stats() });
     },
   });
 }

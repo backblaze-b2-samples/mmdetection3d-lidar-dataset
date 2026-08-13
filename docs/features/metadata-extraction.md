@@ -2,7 +2,7 @@
 # Feature: Metadata Extraction
 
 ## Purpose
-Extract rich metadata (checksums, image/PDF fields) from stored objects, on demand. Since uploads go directly to B2, this no longer runs at upload — it is computed only when the Files browser asks for it.
+Extract rich metadata (checksums, plus **LiDAR point-cloud frame stats** and image/PDF fields) from stored objects, on demand. Since uploads go directly to B2, this no longer runs at upload — it is computed only when the Files browser asks for it. For a `.bin`/`.pcd` frame it reports point count, xyz bounds, intensity mean, and the feature stride — the numpy-only path in `app/engine/point_cloud.py`, so it works without the heavy engine.
 
 ## Used By
 - API: `POST /upload/verify` — the direct-to-B2 upload no longer streams bytes through the API, so extraction no longer runs at upload and the verify response returns `metadata: null`
@@ -13,7 +13,8 @@ Extract rich metadata (checksums, image/PDF fields) from stored objects, on dema
 > Note: extraction is **not** persisted, and (since uploads go directly to B2) it no longer runs at upload at all — the verify response returns `metadata: null`. It is computed only on demand: the `/files-by-key/detail` endpoint re-downloads the object and re-runs extraction — so the checksums/EXIF/PDF fields cost a full object download and are size-guarded (objects above `max_file_size` are refused with 413). The cheap `GET /files-by-key/metadata` (a `head_object`) still returns only the core fields (key, size, type, uploaded-at). Persisting metadata to avoid the re-download is tracked in the tech-debt tracker.
 
 ## Core Functions
-- `services/api/app/service/metadata.py` — `extract_metadata()`, `_extract_image_metadata()`, `_extract_pdf_metadata()`, `_image_warning()`
+- `services/api/app/service/metadata.py` — `extract_metadata()`, `_extract_point_cloud_metadata()`, `_extract_image_metadata()`, `_extract_pdf_metadata()`, `_image_warning()`
+- `services/api/app/engine/point_cloud.py` — `read_points()`, `frame_stats()` (numpy-only, base-safe)
 - `services/api/app/service/files.py` — `get_file_detail()` (heads for size guard, downloads, re-extracts)
 - `services/api/app/repo/b2_object.py` — `get_object_bytes()` (repo-layer object download)
 - `apps/web/src/components/files/file-metadata-panel.tsx` — displays metadata in structured card
@@ -30,14 +31,16 @@ Extract rich metadata (checksums, image/PDF fields) from stored objects, on dema
 ## Outputs
 - `FileMetadataDetail`: filename, size_bytes, size_human, mime_type, extension, md5, sha256, uploaded_at, metadata_warning
 - `metadata_warning: str | null` — set when a format-specific extractor was **skipped or failed**, so a missing Image/PDF section is always explained. Core fields (checksums, size, type) stay exact
+- LiDAR-specific (optional): point_count, point_dimensions (feature stride), point_bounds (xyz min/max), intensity_mean — populated for `.bin`/`.pcd`
 - Image-specific (optional): image_width, image_height, exif dict
 - PDF-specific (optional): pdf_pages, pdf_author, pdf_title
-- Audio/Video (optional): duration_seconds, codec, bitrate — **reserved in the model but not yet extracted**; `extract_metadata()` only populates image and PDF fields today, so these are always null
+- Audio/Video (optional): duration_seconds, codec, bitrate — **reserved in the model but not yet extracted**; `extract_metadata()` populates point-cloud, image, and PDF fields today, so these are always null
 
 ## Flow
 - Extraction runs **on demand**, not at upload — the direct-to-B2 upload never streams bytes through the API
 - `get_file_detail()` heads the object (rejecting >`max_file_size`), downloads it via `get_object_bytes()`, and calls `extract_metadata()` with the object's real `head_object` LastModified time
 - `extract_metadata()` computes MD5 and SHA-256 hashes
+- If `.bin`/`.pcd`: parses the frame with `point_cloud.read_points()` and reports point count, feature stride, xyz bounds, and intensity mean. A `.pcd` without `open3d` (or an unparseable buffer) sets `metadata_warning` instead of failing
 - If image: opens with Pillow, extracts dimensions and EXIF data. A failure sets `metadata_warning` instead of returning nothing — a `DecompressionBombError` (image above Pillow's decode ceiling) gets a message naming that limit, anything else a generic decode message
 - If PDF: opens with PyPDF2, extracts page count, author, title; a parse failure sets `metadata_warning`
 - The decompression-bomb ceiling is a deliberate safety control and stays in place: oversized images are reported, never decoded

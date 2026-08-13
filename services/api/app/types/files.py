@@ -40,3 +40,8 @@ class FileMetadataDetail(BaseModel):
     duration_seconds: float | None = None
     codec: str | None = None
     bitrate: int | None = None
+    # LiDAR point-cloud frame (.bin / .pcd)
+    point_count: int | None = None
+    point_dimensions: int | None = None
+    point_bounds: dict | None = None
+    intensity_mean: float | None = None

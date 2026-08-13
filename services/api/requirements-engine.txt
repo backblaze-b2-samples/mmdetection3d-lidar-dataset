@@ -1,0 +1,44 @@
+# MMDetection3D LiDAR ENGINE dependencies (opt-in, heavy).
+#
+# These are NOT installed by `pnpm run setup`. They are the OpenMMLab 3D stack
+# that the real MMDetection3D engine needs, and mmcv builds from source on
+# macOS arm64, which is slow and fragile — so they are isolated here and
+# installed on demand:
+#
+#     pnpm run setup:mmdet3d-engine
+#
+# That script installs these into the SAME services/api/.venv the base app uses.
+# The 3D-detection code lazy-imports everything below, so the API and the whole
+# `pytest` + `pnpm build` suite stay green WITHOUT this group installed.
+#
+# Pins are deliberately loose ranges — the exact resolution is validated at the
+# verify step, not committed to requirements.lock (which locks the base only).
+#
+# Install order matters: openmim first, then `mim install mmcv==...` (see the
+# setup:mmdet3d-engine script), because mmcv resolves its CUDA/torch build via mim.
+
+# Keep numpy on the 1.x ABI: mmcv/mmdet/mmdet3d all require numpy<2. Pinned
+# explicitly (not merely inherited from the base) so a standalone
+# `pip install -r requirements-engine.txt` can't resolve numpy 2.x.
+numpy<2
+
+# CPU torch build by default; override the index for a CUDA wheel if you have a GPU.
+torch>=2.1.0,<2.4.0
+torchvision>=0.16.0,<0.19.0
+
+openmim>=0.3.9
+mmengine>=0.10.3
+mmcv>=2.1.0,<2.2.0
+mmdet>=3.0.0,<3.4.0
+# The vendor engine. MMDetection3D 1.4.x targets the mmcv 2.1 / mmdet 3.x line.
+mmdet3d>=1.4.0,<1.5.0
+
+# Transitive pins the mim source-build resolver tends to miss.
+# yapf (via mmengine) imports platformdirs at import time.
+platformdirs>=3.5
+ftfy>=6.1.0
+regex>=2023.0.0
+
+# Optional: .pcd decoding for the frame explorer/preview path. KITTI .bin frames
+# work without it (numpy-only, base group).
+open3d>=0.18.0

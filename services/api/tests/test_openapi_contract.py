@@ -34,11 +34,13 @@ def test_openapi_metadata_uses_canonical_local_api_identity():
     schema = app.openapi()
 
     assert schema["info"] == {
-        "title": "Vibe Coding Starter Kit API",
+        "title": "MMDetection3D LiDAR Dataset API",
         "description": (
-            "Local API for the Vibe Coding Starter Kit template, providing file "
-            "upload and management backed by Backblaze B2. This contract "
-            "documents the template's local API, not a hosted public endpoint."
+            "Local API for MMDetection3D LiDAR Dataset: ingest raw LiDAR point-cloud "
+            "frames to Backblaze B2, run MMDetection3D locally to produce per-frame 3D "
+            "detection/segmentation annotations, archive checkpoints, and tie every "
+            "frame to a dataset manifest — all over the S3-compatible API. This contract "
+            "documents the sample's local API, not a hosted public endpoint."
         ),
         "version": "0.1.0",
     }

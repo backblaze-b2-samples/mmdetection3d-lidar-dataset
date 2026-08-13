@@ -1,11 +1,16 @@
 import type {
+  CreateRunRequest,
   DailyUploadCount,
+  EngineStatus,
   FileMetadata,
   FileMetadataDetail,
   FileUploadResponse,
   PresignUploadResponse,
+  RunRecord,
+  SensorLogInfo,
+  UpdateRunRequest,
   UploadStats,
-} from "@vibe-coding-starter-kit/shared";
+} from "@mmdetection3d-lidar-dataset/shared";
 
 // Single-origin deploys (Vercel `services`: one project serving web + API) put
 // the API under /api on the same origin, so no NEXT_PUBLIC_API_URL is needed —
@@ -17,7 +22,7 @@ export const API_BASE =
   (process.env.NODE_ENV === "production" ? "/api" : "http://localhost:8000");
 
 type ApiClientRoute = {
-  method: "delete" | "get" | "post";
+  method: "delete" | "get" | "patch" | "post";
   path: string;
 };
 
@@ -41,6 +46,21 @@ export const API_CLIENT_ROUTES = {
   // payload ceiling no longer caps upload size.
   uploadPresign: { method: "post", path: "/upload/presign" },
   uploadVerify: { method: "post", path: "/upload/verify" },
+  // Frame ingest: presign + verify a raw LiDAR (.bin/.pcd) PUT that lands under
+  // raw/<sensor_id>/<date>/ (the layout the detection flow reads), so an
+  // ingested sensor log becomes selectable in the create-run form.
+  framePresign: { method: "post", path: "/frames/presign" },
+  frameVerify: { method: "post", path: "/frames/verify" },
+  // Detection Runs (the sample's primary entity) + engine/sensor-log helpers.
+  runsList: { method: "get", path: "/runs" },
+  runCreate: { method: "post", path: "/runs" },
+  runDetail: { method: "get", path: "/runs/{run_id}" },
+  runUpdate: { method: "patch", path: "/runs/{run_id}" },
+  runDelete: { method: "delete", path: "/runs/{run_id}" },
+  runExecute: { method: "post", path: "/runs/{run_id}/execute" },
+  engineStatus: { method: "get", path: "/engine/status" },
+  sensorLogs: { method: "get", path: "/sensor-logs" },
+  sensorLogDates: { method: "get", path: "/sensor-logs/{sensor_id}/dates" },
 } as const satisfies Record<string, ApiClientRoute>;
 
 /** Typed API error with HTTP status code for caller-side branching. */
@@ -324,4 +344,115 @@ function putFileToStorage(
     }
     xhr.send(file);
   });
+}
+
+// --- LiDAR frame ingest (raw/<sensor_id>/<date>/ layout) ------------------
+
+/** Raw LiDAR frames are opaque binaries; B2 stores them as octet-stream. */
+const FRAME_CONTENT_TYPE = "application/octet-stream";
+
+export interface FrameLogInput {
+  sensorId: string;
+  date: string;
+  files: File[];
+}
+
+/** Presign -> direct PUT -> verify one raw frame under raw/<sensor>/<date>/. */
+async function uploadFrame(
+  sensorId: string,
+  date: string,
+  file: File,
+  onProgress?: (percent: number) => void,
+): Promise<FileUploadResponse> {
+  const presign = await apiFetch<PresignUploadResponse>(
+    API_CLIENT_ROUTES.framePresign.path,
+    {
+      method: API_CLIENT_ROUTES.framePresign.method.toUpperCase(),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sensor_id: sensorId,
+        date,
+        filename: file.name,
+        content_type: FRAME_CONTENT_TYPE,
+        size_bytes: file.size,
+      }),
+    },
+  );
+  await putFileToStorage(presign, file, onProgress);
+  return apiFetch<FileUploadResponse>(API_CLIENT_ROUTES.frameVerify.path, {
+    method: API_CLIENT_ROUTES.frameVerify.method.toUpperCase(),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ key: presign.key }),
+  });
+}
+
+/**
+ * Ingest one or more raw LiDAR frames (.bin/.pcd) as a sensor log. Each frame
+ * lands under raw/<sensor_id>/<date>/, which is how the detection flow discovers
+ * a runnable sensor log — the sensor id then appears in the create-run form.
+ */
+export async function ingestFrames({
+  sensorId,
+  date,
+  files,
+}: FrameLogInput): Promise<{ sensorId: string; frames: number }> {
+  for (const file of files) {
+    await uploadFrame(sensorId, date, file);
+  }
+  return { sensorId, frames: files.length };
+}
+
+// --- Detection Runs (primary entity) -------------------------------------
+
+function runPath(runId: string, suffix = ""): string {
+  return `/runs/${encodeURIComponent(runId)}${suffix}`;
+}
+
+export async function getEngineStatus() {
+  return apiFetch<EngineStatus>(API_CLIENT_ROUTES.engineStatus.path);
+}
+
+export async function getSensorLogs() {
+  return apiFetch<SensorLogInfo[]>(API_CLIENT_ROUTES.sensorLogs.path);
+}
+
+export async function getSensorLogDates(sensorId: string) {
+  return apiFetch<string[]>(
+    `/sensor-logs/${encodeURIComponent(sensorId)}/dates`,
+  );
+}
+
+export async function getRuns() {
+  return apiFetch<RunRecord[]>(API_CLIENT_ROUTES.runsList.path);
+}
+
+export async function getRun(runId: string) {
+  return apiFetch<RunRecord>(runPath(runId));
+}
+
+export async function createRun(body: CreateRunRequest) {
+  return apiFetch<RunRecord>(API_CLIENT_ROUTES.runCreate.path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function updateRun(runId: string, body: UpdateRunRequest) {
+  return apiFetch<RunRecord>(runPath(runId), {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteRun(runId: string) {
+  return apiFetch<{ deleted: boolean; run_id: string; objects: number }>(
+    runPath(runId),
+    { method: "DELETE" },
+  );
+}
+
+export async function executeRun(runId: string) {
+  return apiFetch<RunRecord>(runPath(runId, "/execute"), { method: "POST" });
 }

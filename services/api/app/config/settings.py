@@ -2,11 +2,40 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    b2_endpoint: str = "https://s3.us-west-004.backblazeb2.com"
-    b2_key_id: str = ""
+    # Standardized B2_* names (parent standard #3). The S3 endpoint is DERIVED
+    # from the region (see the `b2_endpoint` property) so there is one source of
+    # truth and no region string is ever hardcoded in source.
+    b2_region: str = ""
+    b2_application_key_id: str = ""
     b2_application_key: str = ""
     b2_bucket_name: str = ""
-    b2_public_url: str = ""
+    # Optional: only used to build public object URLs for a public bucket. The
+    # app runs fine without it, so it is never required at startup.
+    b2_public_url_base: str = ""
+
+    # --- MMDetection3D LiDAR dataset pipeline ---
+    # Root prefix under which every raw scan and derived run artifact lives in
+    # B2, so the sample-scoped Dataset explorer stays clean and the shared dev
+    # bucket isn't polluted. The full-bucket /files explorer remains global.
+    mmdet3d_prefix: str = "mmdetection3d-lidar-dataset/"
+    # Device selection: auto -> CUDA, then CPU (default CPU). mmcv/mmdet3d MPS
+    # support is weak, so Apple Silicon falls back CUDA->CPU on the auto path;
+    # force MMDET3D_DEVICE=mps only if you know your build works. See
+    # app/engine/device.py.
+    mmdet3d_device: str = "auto"
+    # Override the resolved MMDetection3D config + checkpoint. Empty defaults
+    # keep the API bootable without the heavy engine installed; the model alias
+    # resolves to a config/checkpoint at run time. See
+    # docs/features/mmdet3d-engine.md for the model zoo.
+    mmdet3d_model_config: str = ""
+    mmdet3d_model_checkpoint: str = ""
+    # Default detection score threshold (0..1) and train/val split (0..1).
+    mmdet3d_score_threshold: float = 0.3
+    mmdet3d_val_split: float = 0.2
+    # Sensor id + date the seed script writes its demo frames under, and the
+    # create-run form prefills. See services/api/scripts/seed_lidar.py.
+    mmdet3d_demo_sensor: str = "demo-sensor"
+    mmdet3d_demo_date: str = "2024-01-01"
 
     api_port: int = 8000
     # Interactive API docs (/docs, /redoc, /openapi.json). On by default for
@@ -70,6 +99,22 @@ class Settings(BaseSettings):
     download_count_file: str = ".data/download_count.json"
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+
+    @property
+    def b2_endpoint(self) -> str:
+        """S3-compatible endpoint derived from the region.
+
+        Backblaze B2's S3 endpoint is always `https://s3.{region}.backblazeb2.com`,
+        so the region is the single source of truth — no endpoint URL (and no
+        hardcoded region string) is stored anywhere in source.
+        """
+        return f"https://s3.{self.b2_region}.backblazeb2.com"
+
+    @property
+    def sample_prefix(self) -> str:
+        """Normalized sample prefix, always trailing-slash terminated."""
+        p = self.mmdet3d_prefix
+        return p if p.endswith("/") else f"{p}/"
 
     @property
     def cors_origins(self) -> list[str]:

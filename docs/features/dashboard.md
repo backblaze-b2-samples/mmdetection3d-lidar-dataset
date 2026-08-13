@@ -2,41 +2,38 @@
 # Feature: Dashboard
 
 ## Purpose
-Provide an at-a-glance overview of file storage usage and recent upload activity.
+Give an at-a-glance overview of the LiDAR dataset pipeline: frames ingested, runs completed, 3D boxes, write amplification, storage used, a per-class distribution chart, and the recent detection runs.
 
 ## Used By
 - UI: `/` page (dashboard home)
-- API: `GET /files/stats`, `GET /files`, `GET /files/stats/activity`
+- API: `GET /runs`, `GET /sensor-logs`, `GET /files/stats`
 
 ## Core Functions
-- `apps/web/src/components/dashboard/stats-cards.tsx` — 4 stat cards, plus the on-screen loading notice while the bucket scan runs
-- `apps/web/src/components/dashboard/recent-uploads-table.tsx` — last 10 uploads
-- `apps/web/src/components/dashboard/upload-chart.tsx` — bar chart of uploads per day
-- `apps/web/src/lib/api-client.ts` — `getFileStats()`, `getFiles()`, `getUploadActivity()`
-- `services/api/app/runtime/files.py` — `GET /files/stats` handler
-- `services/api/app/service/files.py` — `get_stats()` business logic
-- `services/api/app/repo/b2_client.py` — `get_upload_stats()` data access
-- `services/api/app/repo/list_cache.py` — the shared bucket listing both `/files/stats` and `/files` read, so the dashboard and the file browser never scan twice
-- `apps/web/src/components/common/loading-notice.tsx` — visible, escalating wait copy
+- `apps/web/src/components/dashboard/lidar-overview.tsx` — 5 stat cards (frames ingested, runs completed, 3D boxes, write amplification, storage used)
+- `apps/web/src/components/dashboard/class-distribution.tsx` — bar chart of 3D boxes by class across all runs
+- `apps/web/src/components/runs/run-table.tsx` — recent detection runs (reused on the dashboard)
+- `apps/web/src/lib/queries.ts` — `useRuns()`, `useSensorLogs()`, `useFileStats()`
+- `services/api/app/service/runs.py` — run + sensor-log aggregation
+- `services/api/app/repo/list_cache.py` — the shared bucket listing both stats and `/files` read, so nothing scans twice
 
 ## Canonical Files
-- Dashboard page layout: `apps/web/src/components/dashboard/stats-cards.tsx`
-- Stats service logic: `services/api/app/service/files.py`
+- Dashboard overview: `apps/web/src/components/dashboard/lidar-overview.tsx`
+- Run aggregation: `services/api/app/service/runs.py`
 
 ## Inputs
 - None (dashboard loads data automatically)
 
 ## Outputs
-- `GET /files/stats` → `UploadStats` (total_files, total_size_bytes, total_size_human, uploads_today, total_downloads)
-- `GET /files` (limit 10) → `FileMetadata[]` for recent uploads table (sorted newest-first)
-- `GET /files/stats/activity?days=7` → `DailyUploadCount[]` for chart (server-side aggregation)
+- `GET /runs` → `RunRecord[]` — drives runs completed, 3D boxes, write amplification, the class-distribution chart, and the recent-runs table
+- `GET /sensor-logs` → `SensorLogInfo[]` — frames ingested + sensor-log count
+- `GET /files/stats` → `UploadStats` — storage used / object count
 
 ## Flow
-- Page loads → three parallel API calls (stats, recent files, upload activity), all served from one cached bucket listing
-- Stats needed ~8.3s to replace the skeletons on a 16k-object bucket, so: the API warms that listing at startup and serves it stale-while-revalidate (only the very first scan after boot can block), and the cards state the wait in words while it runs instead of showing four silent placeholders
-- Stats cards display total files, storage used, uploads today, total downloads
-- Upload chart displays server-aggregated daily counts for last 7 days as bar chart after activity data is known
-- Recent uploads table shows last 10 files with filename, size, type, date, status badge. Each filename is a link to `/files?preview=<key>`, which opens that file's preview in the browser — the rows used to be inert text with no role, tabindex or handler, so the "click a file to preview it" gesture `/files` teaches did nothing here
+- Page loads → parallel API calls (`/runs`, `/sensor-logs`, `/files/stats`), all through TanStack Query hooks
+- Stat cards display frames ingested, runs completed, 3D boxes, write amplification (derived/source bytes), and storage used
+- The class-distribution chart sums each run's per-class 3D-box histogram — the dataset-balance view a labelling team cares about
+- The recent-runs table lists runs with status, model, task, frame count, and box count; each row links to `/runs/<id>`
+- While any run is pending/running the runs list polls so a finished run flips to Done/Error without a manual refresh
 
 ## Edge Cases
 - API unavailable → error states with retry where supported; activity chart does not show a false zero state while loading

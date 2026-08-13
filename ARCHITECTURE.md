@@ -4,17 +4,23 @@
 ## Components
 
 - **apps/web/** — Next.js 16 frontend (App Router, Tailwind v4, shadcn/ui)
-  - Dashboard with stats, upload chart, recent uploads
-  - File upload with drag-and-drop, progress tracking
-  - File browser with preview, download, delete
+  - Dashboard: LiDAR overview stat cards + per-class distribution chart
+  - Detection Runs (`/runs`, `/runs/[id]`) — the primary entity: create/read/edit/delete/run
+  - Ingest (`/upload`) — upload raw LiDAR frames to B2 as sensor logs
+  - Dataset (`/dataset`) — sample-scoped explorer grouped by pipeline stage
+  - File browser (`/files`) — full-bucket explorer with preview, download, delete
   - Dark mode via `next-themes`
 - **services/api/** — FastAPI backend (layered architecture)
-  - REST API for file upload, listing, deletion
-  - B2 S3 integration via boto3
-  - File metadata extraction (images, PDFs)
+  - REST API for LiDAR ingest, detection runs, listing, deletion
+  - B2 S3 integration via boto3 (all sample writes under `settings.sample_prefix`)
+  - Point-cloud frame metadata (point count, xyz bounds, intensity)
   - Health check endpoint with B2 connectivity verification
-  - Structured JSON logging with request tracing
-  - Prometheus-format metrics endpoint
+  - Structured JSON logging with request tracing + Prometheus-format metrics
+- **services/api/app/engine/** — local MMDetection3D engine (lazy-imported)
+  - `device.py` — CPU-default / CUDA-autodetect device resolution (MPS skipped on auto)
+  - `engine_status.py` — cheap importability probe for the `/engine/status` badge
+  - `point_cloud.py` — numpy-only KITTI `.bin` parsing, frame stats, BEV preview (base-safe)
+  - `mmdet3d_runner.py` — lazy-imports MMDetection3D's LiDAR inferencers
 - **packages/shared/** — TypeScript type definitions
   - Mirrors Pydantic models from the API
   - Consumed by `apps/web/` as workspace dependency
@@ -49,13 +55,35 @@ runtime/   FastAPI routes — calls service, never repo directly
 services/api/
   main.py                  App entrypoint, middleware, router registration
   app/
-    types/                 Pydantic models (FileMetadata, UploadStats, etc.)
-    config/                Settings loaded from environment
-    repo/                  B2 S3 client (data access layer)
-    service/               Business logic (upload, files, metadata)
+    types/                 Pydantic models (FileMetadata, RunRecord, etc.)
+    config/                Settings loaded from environment (incl. sample_prefix)
+    repo/                  B2 S3 client + run/frame persistence (data access layer)
+    service/               Business logic (runs, lidar_dataset, frame_ingest, upload, files)
+    engine/                Local MMDetection3D engine (not a layer; lazy-imported by service/)
     runtime/               FastAPI route handlers
   tests/                   pytest tests (structural + integration)
 ```
+
+`engine/` sits outside the `types -> config -> repo -> service -> runtime`
+layering: it holds the heavy local model code, is imported only by `service/`,
+and its imports are lazy so the base app boots without torch/mmdet3d. The
+300-line file cap still applies to it.
+
+### B2 object layout (all under `settings.sample_prefix` = `mmdetection3d-lidar-dataset/`)
+
+```
+raw/<sensor_id>/<date>/<frame>.bin       ingested raw LiDAR frames (S3 put_object, presigned)
+preprocessed/<run_id>/<frame>.npz        preprocessed tensors
+annotations/<run_id>/<frame>.json        per-frame 3D boxes / segmentation
+datasets/<run_id>/manifest.jsonl         dataset manifest (frame -> annotation -> split)
+checkpoints/<model>/checkpoint.json      archived checkpoint record (+ .pth when local)
+runs/<run_id>/run.json                   run manifest (no database)
+runs/<run_id>/previews/<frame>.png       bird's-eye-view previews
+```
+
+The full-bucket `/files` explorer stays global; the `/dataset` explorer is
+scoped to this prefix. Deletes are strictly prefix-scoped to one run and never
+touch raw frames or other runs.
 
 ## Boundary Invariants
 
@@ -108,10 +136,11 @@ See [docs/SECURITY.md](docs/SECURITY.md) for full security documentation.
 
 ## Data Flows
 
-- **Upload**: Browser -> `POST /upload/presign` (API validates the declared file + signs a PUT) -> Browser PUTs bytes **directly to B2** -> `POST /upload/verify` (API HEADs + Range-sniffs the stored object) -> response
-- **List**: Browser -> `GET /files` -> service calls repo -> returns file list
-- **Download**: Browser -> `GET /files/{key}/download` -> service validates key -> repo generates presigned URL -> browser downloads
-- **Delete**: Browser -> `DELETE /files/{key}` -> service validates key -> repo deletes from B2
+- **Ingest**: Browser -> `POST /frames/presign` (validates sensor id/date + signs a PUT) -> Browser PUTs the `.bin`/`.pcd` bytes **directly to B2** under `raw/<sensor_id>/<date>/` -> `POST /frames/verify` (HEAD + size/stride check)
+- **Create run**: Browser -> `POST /runs` -> service writes a `run.json` manifest to B2 (status `pending`)
+- **Run (execute)**: Browser -> `POST /runs/{id}/execute` -> service resolves device, checks the engine is importable (else a 503 with an install hint — never fake-green), lists the sensor log's frames, runs MMDetection3D per frame, writes annotations + previews + preprocessed tensors + a dataset manifest + a checkpoint record to B2, and updates the run manifest to `done`
+- **List/read/edit/delete run**: `GET /runs`, `GET /runs/{id}`, `PATCH /runs/{id}`, `DELETE /runs/{id}` (delete is prefix-scoped to the run's derived artifacts)
+- **List / Download / Delete files**: unchanged S3 `list_objects_v2` / presigned GET / `delete_object` via the repo layer
 
 ## Observability
 
@@ -134,8 +163,11 @@ silently drift from FastAPI. `GET /metrics` is intentionally server-only.
 
 ## Canonical Files
 
-- Layered API handler: `services/api/app/runtime/upload.py`
-- Service orchestration: `services/api/app/service/upload.py`
+- Primary-entity handler: `services/api/app/runtime/runs.py`
+- Primary-entity orchestration: `services/api/app/service/runs.py` + `service/lidar_dataset.py`
+- Local engine: `services/api/app/engine/` (`mmdet3d_runner.py`, `point_cloud.py`, `device.py`)
+- Run + frame persistence (repo layer): `services/api/app/repo/runs.py`
+- Layered upload handler: `services/api/app/runtime/upload.py`
 - B2 data access (repo layer): `services/api/app/repo/b2_client.py`
 - Pydantic models: `services/api/app/types/` (`files.py`, `upload.py`, `stats.py`, `formatting.py`)
 - Config (pydantic-settings): `services/api/app/config/settings.py`
@@ -147,6 +179,10 @@ silently drift from FastAPI. `GET /metrics` is intentionally server-only.
 
 ## Core Features
 
+- [Detection Runs](docs/features/detection-runs.md)
+- [MMDetection3D engine](docs/features/mmdet3d-engine.md)
+- [LiDAR ingest](docs/features/lidar-ingest.md)
+- [Dataset manifest](docs/features/dataset-manifest.md)
 - [File Upload](docs/features/file-upload.md)
 - [File Browser](docs/features/file-browser.md)
 - [Dashboard](docs/features/dashboard.md)

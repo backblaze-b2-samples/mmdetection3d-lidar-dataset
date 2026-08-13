@@ -4,9 +4,11 @@ from fastapi import APIRouter, HTTPException
 from fastapi.concurrency import run_in_threadpool
 
 from app.runtime.metrics import record_upload
+from app.service.frame_ingest import create_frame_presign, verify_frame
 from app.service.upload import UploadError, create_presigned_upload, verify_upload
 from app.types import (
     FileUploadResponse,
+    FramePresignRequest,
     PresignUploadRequest,
     PresignUploadResponse,
     VerifyUploadRequest,
@@ -57,4 +59,42 @@ async def verify_upload_route(req: VerifyUploadRequest):
         result.size_bytes,
         result.content_type,
     )
+    return result
+
+
+@router.post("/frames/presign", response_model=PresignUploadResponse)
+async def presign_frame(req: FramePresignRequest):
+    """Presign a direct-to-B2 PUT for a raw LiDAR frame in the sensor-log layout.
+
+    Writes under ``raw/<sensor_id>/<date>/`` so the frame feeds the detection
+    flow and the sensor log becomes selectable in the create-run form — unlike
+    the generic uploader's flat ``uploads/`` prefix.
+    """
+    try:
+        return await run_in_threadpool(
+            create_frame_presign,
+            sensor_id=req.sensor_id,
+            date=req.date,
+            filename=req.filename,
+            content_type=req.content_type,
+            size_bytes=req.size_bytes,
+        )
+    except UploadError as e:
+        logger.warning("Frame presign rejected: %s", e.detail)
+        record_upload(success=False)
+        raise HTTPException(status_code=e.status_code, detail=e.detail) from None
+
+
+@router.post("/frames/verify", response_model=FileUploadResponse)
+async def verify_frame_route(req: VerifyUploadRequest):
+    """Confirm a LiDAR frame just uploaded directly to B2 is valid."""
+    try:
+        result = await run_in_threadpool(verify_frame, req.key)
+    except UploadError as e:
+        logger.warning("Frame verification rejected: %s", e.detail)
+        record_upload(success=False)
+        raise HTTPException(status_code=e.status_code, detail=e.detail) from None
+
+    record_upload(success=True)
+    logger.info("Frame ingested (direct): key=%s size=%d", result.key, result.size_bytes)
     return result

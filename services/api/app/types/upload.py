@@ -42,3 +42,18 @@ class VerifyUploadRequest(BaseModel):
     """Sent after the direct PUT so the API can inspect the stored object."""
 
     key: str
+
+
+class FramePresignRequest(BaseModel):
+    """Declare a raw LiDAR frame upload targeting the sensor-log layout.
+
+    Unlike the generic uploader (flat ``uploads/``), a frame lands under
+    ``raw/<sensor_id>/<date>/`` so it becomes selectable as a sensor log in the
+    create-run form and feeds the detection pipeline.
+    """
+
+    sensor_id: str
+    date: str
+    filename: str
+    content_type: str
+    size_bytes: int

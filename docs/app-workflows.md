@@ -3,6 +3,31 @@
 
 User journeys inside the application.
 
+## Ingest a LiDAR sensor log
+
+- User navigates to `/upload` (Ingest)
+- Enters a `sensor_id` and acquisition `date`, and selects one or more KITTI `.bin` / `.pcd` frames
+- Each frame uploads **directly from the browser to B2** under `raw/<sensor_id>/<date>/` (presigned PUT); a `.bin` whose byte length isn't a float32 multiple is rejected
+- On success: a toast, and the sensor log becomes selectable on the Runs create form
+- See: [LiDAR ingest](features/lidar-ingest.md)
+
+## Create and run a Detection Run
+
+- User navigates to `/runs`
+- Fills the create form: label (free text), sensor log (Select, from B2), model (`pointpillars`/`centerpoint`/`second`), task (`detection`/`segmentation`), score threshold, val split, device — the form surfaces safe defaults as guidance (try `pointpillars` / `detection` / `0.3` on the seeded demo log)
+- Submits → a `pending` run is created and the user lands on `/runs/<id>`
+- The engine-status badge shows whether MMDetection3D is installed; if not, running the run fails loudly with an install hint (never a fake result)
+- User clicks **Run detection** → the run goes `running` (live progress + polling), then `done`: each frame shows a bird's-eye-view preview and its 3D-box annotations, and the dataset manifest + checkpoint record are downloadable from B2
+- User can **Edit** (label / model / task / threshold / val_split / device, then re-run) or **Delete** (removes only this run's derived artifacts)
+- See: [Detection Runs](features/detection-runs.md), [MMDetection3D engine](features/mmdet3d-engine.md)
+
+## Browse the Dataset
+
+- User navigates to `/dataset`
+- Sees every object this app wrote to B2, scoped to the sample prefix and grouped by pipeline stage (raw, preprocessed, annotations, datasets, checkpoints, runs), each with counts + sizes and a per-object download
+- The full-bucket `/files` explorer stays available for everything else
+- See: [File Browser](features/file-browser.md), [Dataset manifest](features/dataset-manifest.md)
+
 ## Upload Files
 
 - User navigates to `/upload`

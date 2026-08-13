@@ -6,7 +6,11 @@ Upload files from the browser **directly to Backblaze B2** with real-time
 progress tracking. The bytes never pass through the API, so uploads are not
 capped by Vercel's ~4.5 MB Function payload limit — the same flow handles up to
 `max_file_size` (100 MB default) on local, Railway, and Vercel alike, and is a
-direct showcase of B2 as the storage layer.
+direct showcase of B2 as the storage layer. This is the **generic** uploader
+(flat `uploads/` prefix); the domain-specific path is the LiDAR sensor-log
+ingest on the same `/upload` (Ingest) page — see
+[LiDAR ingest](lidar-ingest.md), which reuses this exact presign → direct-PUT →
+verify transport to land frames under `raw/<sensor_id>/<date>/`.
 
 ## Used By
 - UI: `/upload` page, upload form component

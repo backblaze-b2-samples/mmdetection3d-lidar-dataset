@@ -11,14 +11,25 @@ This is the authoritative control surface for all coding agents. Read this first
 ## 1. Repository Map
 
 ```
-apps/web/          Next.js 16 frontend (App Router, Tailwind v4, shadcn/ui)
-services/api/      FastAPI backend (layered: types/config/repo/service/runtime)
-packages/shared/   Shared TypeScript types
-docs/              System of record (features, workflows, security, reliability)
-docs/exec-plans/   Execution plans and tech debt tracker
-infra/railway/     Deployment config
-infra/vercel/      Vercel deployment contract
+apps/web/              Next.js 16 frontend (App Router, Tailwind v4, shadcn/ui)
+services/api/          FastAPI backend (layered: types/config/repo/service/runtime)
+services/api/app/engine/  Local MMDetection3D LiDAR engine (lazy-imported)
+packages/shared/       Shared TypeScript types
+docs/                  System of record (features, workflows, security, reliability)
+docs/exec-plans/       Execution plans and tech debt tracker
+infra/railway/         Deployment config
+infra/vercel/          Vercel deployment contract
 ```
+
+This app is **MMDetection3D LiDAR Dataset**: a dataset-preparation pipeline that
+ingests raw LiDAR point-cloud frames (KITTI `.bin` / `.pcd`) to Backblaze B2,
+runs the real **MMDetection3D** engine LOCALLY to produce per-frame 3D
+detection/segmentation annotations, archives model checkpoints, and ties every
+frame to a dataset manifest JSONL — all over the **S3-compatible API**. The
+primary entity is the **Detection Run** (`/runs`). The heavy engine is opt-in
+(`pnpm run setup:mmdet3d-engine`) and every engine import is lazy, so the API +
+`pnpm verify` stay green without it (numpy-only `point_cloud.py` parses frames in
+the base app).
 
 ## 2. Building on This Starter Kit
 
@@ -26,16 +37,17 @@ When this repo is used as the foundation for a new app, the following pieces are
 
 **Keep as-is (do not strip, rename, or replace)**
 - **UI kit / design system.** `apps/web/src/components/ui/` (shadcn primitives), the design tokens in `apps/web/src/app/globals.css`, and the `/design` reference page. Build new screens with these primitives; never edit the generated `components/ui/` files directly. Restyling happens through tokens in `globals.css`.
-- **File Explorer.** `/files` route, `apps/web/src/app/files/`, and `apps/web/src/components/files/`. The Files sidebar entry in `apps/web/src/components/layout/app-sidebar.tsx` stays.
-- **Upload.** `/upload` route, `apps/web/src/app/upload/`, and `apps/web/src/components/upload/`. The Upload sidebar entry stays.
-- The sidebar nav itself (Dashboard, Upload, Files, Settings, plus the Design System utility link).
+- **Full-bucket File Explorer.** `/files` route, `apps/web/src/app/files/`, and `apps/web/src/components/files/`. The Files sidebar entry stays — it is the global bucket explorer, kept alongside the sample-scoped `/dataset` view.
+- **Ingest.** `/upload` route + `apps/web/src/components/upload/` (relabelled "Ingest"). This is how raw LiDAR frames are ingested to B2 as sensor logs.
+- **Detection Runs (this app's primary entity).** `/runs` + `/runs/[id]`, `apps/web/src/components/runs/`, and the `runs`/`engine`/`sensor-logs` API. Full CRUD + run lifecycle.
+- The sidebar nav (Dashboard, Ingest, Runs, Dataset, Files, Settings, plus the Design System utility link).
 
 **Adapt to the new use case**
-- **Dashboard.** `/` route and `apps/web/src/components/dashboard/` (stats cards, upload chart, recent uploads table) are illustrative defaults. Replace them with metrics, charts, and tables that reflect what the new app actually does (e.g. transcripts processed, embeddings indexed, classifications run). New aggregations must flow through the same `runtime -> service -> repo` layering and be exposed via TanStack Query hooks in `apps/web/src/lib/queries.ts` — no bare `useEffect + fetch`.
+- **Dashboard.** `/` route and `apps/web/src/components/dashboard/` (LiDAR overview stat cards + per-class distribution chart) reflect the pipeline: frames ingested, runs completed, 3D boxes, write amplification, storage. New aggregations flow through the same `runtime -> service -> repo` layering and are exposed via TanStack Query hooks in `apps/web/src/lib/queries.ts` — no bare `useEffect + fetch`.
 - Update `docs/features/dashboard.md` in the same PR as any dashboard change (see §9).
 
 **Why this contract exists**
-- The UI kit, Files, and Upload pages are the reusable B2-backed scaffolding that makes this a starter kit — stripping them defeats the purpose. The dashboard is the only screen explicitly designed to be rewritten per app.
+- The UI kit, Files, and Ingest pages are the reusable B2-backed scaffolding that makes this a starter kit — stripping them defeats the purpose. The dashboard is the screen explicitly designed to be rewritten per app.
 
 ## 3. Architectural Invariants
 
@@ -105,7 +117,9 @@ no git work tree, the whole group) that git cannot answer for is reported as
 
 ```bash
 # Run
-pnpm run setup         # idempotent cold-start setup (.env copy, deps, venv)
+pnpm run setup                 # idempotent cold-start setup (.env copy, deps, venv — BASE only)
+pnpm run setup:mmdet3d-engine  # opt-in: install the heavy MMDetection3D engine (torch + OpenMMLab) into the venv
+pnpm run seed                  # upload a demo LiDAR sensor log to B2 (synthetic by default; --apply to write)
 pnpm run doctor        # preflight environment check (also runs before pnpm dev)
 pnpm dev               # start both frontend and backend
 pnpm dev:web           # frontend only
@@ -196,6 +210,9 @@ If documentation and implementation conflict, update docs in the same PR. Docume
 |-------|----------|
 | System layout, data flows, boundaries | [ARCHITECTURE.md](ARCHITECTURE.md) |
 | Feature docs | [docs/features/](docs/features/) |
+| Detection Runs (primary entity: CRUD + run lifecycle) | [docs/features/detection-runs.md](docs/features/detection-runs.md) |
+| MMDetection3D engine (setup, device policy, model zoo) | [docs/features/mmdet3d-engine.md](docs/features/mmdet3d-engine.md) |
+| LiDAR ingest + dataset manifest | [docs/features/lidar-ingest.md](docs/features/lidar-ingest.md), [docs/features/dataset-manifest.md](docs/features/dataset-manifest.md) |
 | User journeys | [docs/app-workflows.md](docs/app-workflows.md) |
 | Engineering workflows and testing | [docs/dev-workflows.md](docs/dev-workflows.md) |
 | Security principles | [docs/SECURITY.md](docs/SECURITY.md) |

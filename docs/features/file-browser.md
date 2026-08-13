@@ -2,10 +2,16 @@
 # Feature: File Browser
 
 ## Purpose
-List, preview, download, and delete files stored in Backblaze B2.
+List, preview, download, and delete files stored in Backblaze B2. This is the
+**full-bucket** explorer (`/files`), kept as-is from the starter contract. It
+sits alongside the sample-scoped **Dataset** explorer (`/dataset`,
+`apps/web/src/components/dataset/dataset-explorer.tsx`), which reuses the same
+`GET /files?prefix=` listing but scopes to `mmdetection3d-lidar-dataset/` and
+groups objects by pipeline stage (raw / preprocessed / annotations / datasets /
+checkpoints / runs).
 
 ## Used By
-- UI: `/files` page, file browser component
+- UI: `/files` page (full-bucket) and `/dataset` page (sample-scoped)
 - API: `GET /files`, `GET /files-by-key/metadata?key=...`, `GET /files-by-key/detail?key=...`, `GET /files-by-key/download?key=...`, `GET /files-by-key/preview?key=...`, `DELETE /files-by-key?key=...`
 - Legacy API: `GET /files/{key}`, `GET /files/{key}/download`, `GET /files/{key}/preview`, `DELETE /files/{key}`
 

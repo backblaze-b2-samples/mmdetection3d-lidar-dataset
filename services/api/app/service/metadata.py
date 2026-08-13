@@ -25,6 +25,13 @@ _PDF_WARNING = (
     "PDF metadata unavailable — the document could not be parsed. Checksums "
     "and size are still exact."
 )
+_POINTCLOUD_WARNING = (
+    "Point-cloud metadata unavailable — the frame could not be parsed as a "
+    "KITTI .bin / .pcd point cloud. Checksums and size are still exact."
+)
+
+# LiDAR frame formats surfaced by point-cloud metadata extraction.
+_POINTCLOUD_EXTS = {"bin", "pcd"}
 
 
 def _image_warning(exc: Exception) -> str:
@@ -84,6 +91,29 @@ def _extract_pdf_metadata(file_data: bytes) -> dict:
         return {"metadata_warning": _PDF_WARNING}
 
 
+def _extract_point_cloud_metadata(file_data: bytes, extension: str) -> dict:
+    """Frame stats for a LiDAR point cloud (.bin / .pcd).
+
+    numpy-only for .bin (a base dependency), so this works without the heavy
+    engine. .pcd needs open3d (engine group) and degrades to a warning when it
+    is missing.
+    """
+    try:
+        from app.engine import point_cloud
+
+        points = point_cloud.read_points(file_data, fmt=extension)
+        stats = point_cloud.frame_stats(points)
+        return {
+            "point_count": stats["point_count"],
+            "point_dimensions": stats["feature_count"],
+            "point_bounds": stats["bounds"],
+            "intensity_mean": stats["intensity"]["mean"],
+        }
+    except Exception:
+        logger.warning("Point-cloud metadata extraction failed", exc_info=True)
+        return {"metadata_warning": _POINTCLOUD_WARNING}
+
+
 def extract_metadata(
     file_data: bytes,
     filename: str,
@@ -103,7 +133,9 @@ def extract_metadata(
 
     extra: dict = {}
 
-    if content_type.startswith("image/"):
+    if extension in _POINTCLOUD_EXTS:
+        extra = _extract_point_cloud_metadata(file_data, extension)
+    elif content_type.startswith("image/"):
         extra = _extract_image_metadata(file_data)
     elif content_type == "application/pdf":
         extra = _extract_pdf_metadata(file_data)

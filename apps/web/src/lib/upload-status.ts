@@ -1,7 +1,7 @@
 import type {
   FileMetadataDetail,
   FileStatus,
-} from "@vibe-coding-starter-kit/shared";
+} from "@mmdetection3d-lidar-dataset/shared";
 
 /** One row of the upload queue. Owned by `UploadQueueProvider`. */
 export interface UploadItem {
