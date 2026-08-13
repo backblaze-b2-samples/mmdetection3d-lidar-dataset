@@ -37,7 +37,7 @@ mmdet3d>=1.4.0,<1.5.0
 # yapf (via mmengine) imports platformdirs at import time.
 platformdirs>=3.5
 ftfy>=6.1.0
-regex>=2023.0.0
+regex>=2026.7.19
 
 # Optional: .pcd decoding for the frame explorer/preview path. KITTI .bin frames
 # work without it (numpy-only, base group).
