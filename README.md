@@ -13,6 +13,9 @@ Explore the [Backblaze B2 AI integrations and sample applications](https://www.b
 - FastAPI backend with strict layered architecture and structural tests
 - Agent-optimized docs — your AI coding agent can read the repo and start contributing immediately
 
+<!-- labs-project-page -->
+Explore this sample on the [Backblaze Labs project page](https://backblazelabs.com/projects/mmdetection3d-lidar-dataset/).
+
 ## What it looks like
 
 **Dashboard** — LiDAR dataset overview with frames ingested, runs completed, 3D boxes, write amplification, and storage used, plus a per-class box distribution and a recent-runs table.
