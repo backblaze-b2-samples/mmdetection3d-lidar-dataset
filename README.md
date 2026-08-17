@@ -3,8 +3,6 @@
 
 A dataset-preparation pipeline for autonomous-vehicle and robotics teams who build **3D object-detection / segmentation datasets** from raw LiDAR point clouds. Raw scans (`.bin` / `.pcd`) are ingested to **[Backblaze B2](https://www.backblaze.com/sign-up/ai-cloud-storage?utm_source=github&utm_medium=referral&utm_campaign=ai_artifacts&utm_content=b2ai-mmdetection3d-lidar-dataset)**, the real **[MMDetection3D](https://github.com/open-mmlab/mmdetection3d)** engine runs **locally** to produce per-frame 3D bounding-box + segmentation annotations, model checkpoints are archived to B2, and a dataset manifest JSONL ties every frame to its annotation and train/val split — all over the **S3-compatible API**. It runs on local OSS with **B2 credentials only — no second API key.**
 
-Explore the [Backblaze B2 AI integrations and sample applications](https://www.backblaze.com/cloud-storage/b2-ai-integrations?utm_source=github&utm_medium=referral&utm_campaign=ai_artifacts&utm_content=b2ai-mmdetection3d-lidar-dataset) directory, and the checked-in [local OpenAPI contract](docs/api/openapi.json).
-
 **What you get out of the box:**
 - End-to-end LiDAR dataset pipeline: ingest → detect/segment → per-frame annotations → dataset manifest, all backed by B2
 - The real MMDetection3D engine, run locally (PointPillars / SECOND / CenterPoint) — opt-in, CPU by default, GPU auto-detected
