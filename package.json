@@ -28,7 +28,7 @@
     "test:e2e": "pnpm --filter @mmdetection3d-lidar-dataset/web exec playwright test"
   },
   "devDependencies": {
-    "concurrently": "^9.1.0"
+    "concurrently": "^10.0.4"
   },
   "engines": {
     "node": ">=20",
